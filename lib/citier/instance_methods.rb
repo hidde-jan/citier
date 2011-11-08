@@ -8,7 +8,10 @@ module Citier
     module ForcedWriters
       def force_attributes(new_attributes, options = {})
         new_attributes = @attributes.merge(new_attributes) if options[:merge]
-        @attributes = new_attributes
+
+        new_attributes.each do |key, val|
+          self.send "#{key}=", val
+        end
         
         if options[:clear_caches] != false
           @aggregation_cache = {}

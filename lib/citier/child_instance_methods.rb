@@ -13,12 +13,21 @@ module Citier
       self.run_callbacks(:save) do
         self.run_callbacks(self.new_record? ? :create : :update) do
           #get the attributes of the class which are inherited from it's parent.
+
+          child_class = self.class
+          parent_class = self.class.superclass
+
           attributes_for_parent = self.attributes.reject { |key,value| !self.class.superclass.column_names.include?(key) }
           changed_attributes_for_parent = self.changed_attributes.reject { |key,value| !self.class.superclass.column_names.include?(key) }
 
+          if parent_class.respond_to? :accessible_attributes
+            attributes_for_parent.merge!(Hash[*parent_class.accessible_attributes.to_a.select { |attr| self.respond_to? attr }.collect { |attr| [attr, self.send(attr)] }.flatten])
+            changed_attributes_for_parent.merge!(self.changed_attributes.reject { |key,value| !parent_class.accessible_attributes.include? key })
+          end
+
           # Get the attributes of the class which are unique to this class and not inherited.
-          attributes_for_current = self.attributes.reject { |key,value| self.class.superclass.column_names.include?(key) }
-          changed_attributes_for_current = self.changed_attributes.reject { |key,value| self.class.superclass.column_names.include?(key) }
+          attributes_for_current = self.attributes.reject { |key,value| attributes_for_parent.has_key?(key) }
+          changed_attributes_for_current = self.changed_attributes.reject { |key,value| changed_attributes_for_parent.has_key?(key) }
 
           citier_debug("Attributes for #{self.class.superclass.to_s}: #{attributes_for_parent.inspect}")
           citier_debug("Changed attributes for #{self.class.superclass.to_s}: #{changed_attributes_for_parent.keys.inspect}")
@@ -49,7 +58,7 @@ module Citier
           if !parent_saved
             # Couldn't save parent class
             citier_debug("Class (#{self.class.superclass.to_s}) could not be saved")
-            citier_debug("Errors = #{parent.errors.to_s}")
+            citier_debug("Errors = #{parent.errors.messages.to_s}")
             return false # Return false and exit run_callbacks :save and :create/:update, so the after_ callback won't run.
           end
     
